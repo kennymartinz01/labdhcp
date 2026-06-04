@@ -1,1 +1,0 @@
-# -setup_gateway.sh
