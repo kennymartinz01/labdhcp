@@ -3,9 +3,9 @@
 # LAB 3 DHCP - GATEWAY VM (VM 1) - pipe-ready
 # Run: wget -qO- <RAW_URL> | tr -d '\r' | sudo bash
 #
-# This VM = 192.168.99.1 | Relay gets 192.168.99.2
-# Provides: Kea DHCP on 192.168.99.0/29, routing to the
-# 192.168.99.80/28 (node) network, and NAT masquerade so the
+# This VM = 192.168.55.1 | Relay gets 192.168.55.2
+# Provides: Kea DHCP on 192.168.55.0/29, routing to the
+# 192.168.55.80/28 (node) network, and NAT masquerade so the
 # inner network reaches the internet. All reboot-persistent.
 # NAT interface is hardcoded to enp0s3.
 # ============================================================
@@ -20,7 +20,7 @@ error(){ echo -e "${RED}[FAIL]${NC} $1"; exit 1; }
 NAT_IF="enp0s3"
 
 echo -e "${BLUE}=== LAB 3 DHCP - GATEWAY VM SETUP ===${NC}"
-echo "Subnet 192.168.99.0/29 | This VM 192.168.99.1 | Relay gets 192.168.99.2"
+echo "Subnet 192.168.55.0/29 | This VM 192.168.55.1 | Relay gets 192.168.55.2"
 echo "NAT interface: $NAT_IF (hardcoded) | masquerade + persistent internet"
 echo ""
 
@@ -41,14 +41,14 @@ network:
       dhcp4: yes
     ${INTNET_IF}:
       dhcp4: no
-      addresses: [192.168.99.1/29]
+      addresses: [192.168.55.1/29]
       routes:
-        - to: 192.168.99.80/28
-          via: 192.168.99.2
+        - to: 192.168.55.80/28
+          via: 192.168.55.2
 EOF
 chmod 600 /etc/netplan/99_config.yaml
 netplan apply; sleep 2
-success "Netplan applied - $INTNET_IF = 192.168.99.1/29"
+success "Netplan applied - $INTNET_IF = 192.168.55.1/29"
 
 # ------------------------------------------------------------
 # IP forwarding - PERSISTENT via /etc/sysctl.d (survives reboot)
@@ -90,10 +90,10 @@ cat > /etc/kea/kea-dhcp4.conf << EOF
     },
     "subnet4": [{
       "id": 1,
-      "subnet": "192.168.99.0/29",
-      "pools": [{"pool": "192.168.99.2 - 192.168.99.6"}],
+      "subnet": "192.168.55.0/29",
+      "pools": [{"pool": "192.168.55.2 - 192.168.55.6"}],
       "option-data": [
-        {"name": "routers", "data": "192.168.99.1"},
+        {"name": "routers", "data": "192.168.55.1"},
         {"name": "domain-name-servers", "data": "8.8.8.8"}
       ]
     }]
@@ -169,8 +169,8 @@ success "SSH installed and running"
 # ------------------------------------------------------------
 echo ""
 echo -e "${GREEN}=== GATEWAY VM SETUP COMPLETE ===${NC}"
-echo -e "  $INTNET_IF = 192.168.99.1/29 | Kea serving 192.168.99.0/29"
-echo -e "  Route to node net: 192.168.99.80/28 via 192.168.99.2"
+echo -e "  $INTNET_IF = 192.168.55.1/29 | Kea serving 192.168.55.0/29"
+echo -e "  Route to node net: 192.168.55.80/28 via 192.168.55.2"
 echo -e "  IP forwarding: persistent (=1) | NAT masquerade: $NAT_IF (nft, with counter)"
 echo -e "  Persistence: /etc/sysctl.d/99-ipforward.conf + /etc/nftables.ruleset + routable.d hook"
 echo -e "  Port 67: $(ss -ulnp | grep ':67' | awk '{print $NF}')"
