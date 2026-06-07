@@ -1,8 +1,16 @@
 #!/bin/bash
 # ============================================================
-# LAB 3 DHCP - RELAY VM (VM 2) - Pastebin pipe-ready
+# LAB 3 DHCP - RELAY VM (VM 2) - pipe-ready  [Y = 55]
 # NO PROMPTS - safe to pipe. Gateway MUST be running first.
-# Run: wget -qO- https://pastebin.com/raw/LINK | tr -d '\r' | sudo bash
+# Run: wget -qO- <RAW_URL> | tr -d '\r' | sudo bash
+#
+# enp0s8 dynamic (192.168.55.2) from Gateway | enp0s9 static 192.168.55.81
+# Kea serving 192.168.55.80/28 | REQUIRES Gateway running first
+#
+# NOTE: to guarantee enp0s8 = .2, boot this VM with the intnet
+# (Adapter 2) cable DISCONNECTED, run this script, THEN reconnect
+# the cable so enp0s8 makes its first-and-only DHCP request into a
+# clean pool. See run procedure.
 # ============================================================
 set -e
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'; NC='\033[0m'
@@ -11,9 +19,9 @@ success(){ echo -e "${GREEN}[DONE]${NC} $1"; }
 warn(){ echo -e "${YELLOW}[WARN]${NC} $1"; }
 error(){ echo -e "${RED}[FAIL]${NC} $1"; exit 1; }
 
-echo -e "${YELLOW}=== LAB 3 DHCP - RELAY VM SETUP ===${NC}"
-echo "enp0s8 dynamic (192.168.99.2) from Gateway | enp0s9 static 192.168.99.81"
-echo "Kea serving 192.168.99.80/28 | REQUIRES Gateway running first"
+echo -e "${YELLOW}=== LAB 3 DHCP - RELAY VM SETUP (Y=55) ===${NC}"
+echo "enp0s8 dynamic (192.168.55.2) from Gateway | enp0s9 static 192.168.55.81"
+echo "Kea serving 192.168.55.80/28 | REQUIRES Gateway running first"
 echo ""
 
 # Detect interfaces (Adapter 1 empty -> only 2 NICs, but NAT may be on for install)
@@ -41,24 +49,24 @@ network:
       dhcp4: yes
     ${BRIDGE_IF}:
       dhcp4: no
-      addresses: [192.168.99.81/28]
+      addresses: [192.168.55.81/28]
 EOF
 chmod 600 /etc/netplan/99_config.yaml
 netplan apply; sleep 3
 
 RELAY_IP=$(ip -4 addr show "$INTNET_IF" | grep inet | awk '{print $2}')
-echo "$RELAY_IP" | grep -q "192.168.99" && success "$INTNET_IF = $RELAY_IP (dynamic from Gateway)" || warn "$INTNET_IF = $RELAY_IP (expected 192.168.99.2 - is Gateway Kea running?)"
+echo "$RELAY_IP" | grep -q "192.168.55" && success "$INTNET_IF = $RELAY_IP (dynamic from Gateway)" || warn "$INTNET_IF = $RELAY_IP (expected 192.168.55.2 - is Gateway Kea running? cable connected?)"
 
 # Remove conflicting default route
-if ip route show | grep -q "default via 192.168.99"; then
-    ip route del default via $(ip route show | grep "default via 192.168.99" | awk '{print $3}') 2>/dev/null || true
+if ip route show | grep -q "default via 192.168.55"; then
+    ip route del default via $(ip route show | grep "default via 192.168.55" | awk '{print $3}') 2>/dev/null || true
     success "Removed conflicting default route"
 fi
 
-# IP forwarding
+# IP forwarding - persistent (script writes /etc/sysctl.conf; reboot-safe)
 grep -q "net.ipv4.ip_forward=1" /etc/sysctl.conf || echo "net.ipv4.ip_forward=1" >> /etc/sysctl.conf
 sysctl -p > /dev/null
-success "IP forwarding enabled"
+success "IP forwarding enabled (persistent via /etc/sysctl.conf)"
 
 # Install Kea
 info "Installing Kea..."
@@ -91,10 +99,10 @@ cat > /etc/kea/kea-dhcp4.conf << EOF
     },
     "subnet4": [{
       "id": 1,
-      "subnet": "192.168.99.80/28",
-      "pools": [{"pool": "192.168.99.82 - 192.168.99.94"}],
+      "subnet": "192.168.55.80/28",
+      "pools": [{"pool": "192.168.55.82 - 192.168.55.94"}],
       "option-data": [
-        {"name": "routers", "data": "192.168.99.81"},
+        {"name": "routers", "data": "192.168.55.81"},
         {"name": "domain-name-servers", "data": "8.8.8.8"}
       ]
     }]
@@ -131,8 +139,10 @@ systemctl start ssh; systemctl enable ssh > /dev/null 2>&1
 success "SSH installed and running"
 
 echo ""
-echo -e "${GREEN}=== RELAY VM SETUP COMPLETE ===${NC}"
+echo -e "${GREEN}=== RELAY VM SETUP COMPLETE (Y=55) ===${NC}"
 echo -e "  $INTNET_IF = $(ip -4 addr show $INTNET_IF | grep inet | awk '{print $2}') (dynamic)"
-echo -e "  $BRIDGE_IF = 192.168.99.81/28 (static) | Kea serving 192.168.99.80/28"
+echo -e "  $BRIDGE_IF = 192.168.55.81/28 (static) | Kea serving 192.168.55.80/28"
 echo -e "  Port 67: $(ss -ulnp | grep ':67' | awk '{print $NF}')"
-echo -e "${YELLOW}  NEXT: Run the Node script on the Node VM (PC2)${NC}"
+echo -e "${YELLOW}  If enp0s8 is NOT .2: reconnect the intnet cable now, then:${NC}"
+echo -e "${YELLOW}    sudo systemctl restart systemd-networkd ; sleep 5 ; ip a show $INTNET_IF${NC}"
+echo -e "${YELLOW}  NEXT: Run the Node script on the Node VM (student laptop)${NC}"
