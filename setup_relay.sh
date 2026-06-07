@@ -63,10 +63,11 @@ if ip route show | grep -q "default via 192.168.55"; then
     success "Removed conflicting default route"
 fi
 
-# IP forwarding - persistent (script writes /etc/sysctl.conf; reboot-safe)
-grep -q "net.ipv4.ip_forward=1" /etc/sysctl.conf || echo "net.ipv4.ip_forward=1" >> /etc/sysctl.conf
-sysctl -p > /dev/null
-success "IP forwarding enabled (persistent via /etc/sysctl.conf)"
+# IP forwarding - PERSISTENT via /etc/sysctl.d (reliable reboot-safe method)
+echo 'net.ipv4.ip_forward=1' > /etc/sysctl.d/99-ipforward.conf
+sysctl --system > /dev/null 2>&1
+FWD=$(sysctl -n net.ipv4.ip_forward)
+[ "$FWD" = "1" ] && success "IP forwarding enabled and persistent (=1) via /etc/sysctl.d" || error "IP forwarding not active"
 
 # Install Kea
 info "Installing Kea..."
